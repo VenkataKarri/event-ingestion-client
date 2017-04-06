@@ -26,6 +26,9 @@ import org.jboss.resteasy.client.jaxrs.engines.ApacheHttpClient4Engine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 
@@ -36,7 +39,8 @@ import com.google.common.collect.Sets;
 public class SendEvent implements Runnable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SendEvent.class);
 	private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-	public static AtomicInteger ATOMIC_INTEGER = new AtomicInteger(1);
+	private static final ObjectMapper MAPPER = new ObjectMapper();
+	public static AtomicInteger ROW_NUMBER = new AtomicInteger(1);
 	private static Client CLIENT = getClient();
 	
 	private static final int MAX_EVENT_SIZE = 32768;
@@ -48,6 +52,7 @@ public class SendEvent implements Runnable {
 	private static final String REF = "ref";
 	private static final String TYPE = "type";
 	private static final String NAME = "name";
+	private static final String SOURCE_NAME = "source.name";
 	
 	private static final String SEVERITY = "severity";
 	private static final String STATUS = "status";
@@ -58,7 +63,7 @@ public class SendEvent implements Runnable {
 	private static final String FINGER_PRINT_FIELDS = "fingerprintFields";
 	private static final String PROPERTIES = "properties";
 	
-	private static final ImmutableSet<String> TAGGED_FINGERPRINTFIELDS = ImmutableSet.of(TITLE, MESSAGE, STATUS, SEVERITY);
+	private static final ImmutableSet<String> TAGGED_FINGERPRINTFIELDS = ImmutableSet.of(TITLE, MESSAGE, STATUS, SEVERITY, SOURCE_NAME);
 	
 	private XSSFSheet xssfSheet;
 	private String url;
@@ -75,9 +80,9 @@ public class SendEvent implements Runnable {
 	public static Client getClient() {
 		Client client = null;
         try {
-            HttpClient httpClient = HttpClients.custom().setMaxConnTotal(100).setMaxConnPerRoute(100).build();
+            HttpClient httpClient = HttpClients.custom().setMaxConnTotal(EventIngestion.THREAD_COUNT).setMaxConnPerRoute(EventIngestion.THREAD_COUNT).build();
             ApacheHttpClient4Engine engine = new ApacheHttpClient4Engine(httpClient);
-            ExecutorService executor = Executors.newFixedThreadPool(100);
+            ExecutorService executor = Executors.newFixedThreadPool(EventIngestion.THREAD_COUNT);
             client = new ResteasyClientBuilder().httpEngine(engine).asyncExecutor(executor).build();
         } catch (Exception e) {
         	LOGGER.error("Error creating all trusting client: ", e);
@@ -114,13 +119,13 @@ public class SendEvent implements Runnable {
 		int count = 0;
 		XSSFRow headerRow = xssfSheet.getRow(0);
 		while (true) {
-			int rownum = ATOMIC_INTEGER.get();
+			int rownum = ROW_NUMBER.get();
 			XSSFRow currentRow = xssfSheet.getRow(rownum);
 			if (currentRow == null) {
-				LOGGER.debug("Thread count: [{}]", count);
+				LOGGER.debug("Number of rows processed: [{}]", count);
 				break;
 			}
-			rownum = ATOMIC_INTEGER.getAndIncrement();
+			rownum = ROW_NUMBER.getAndIncrement();
 			currentRow = xssfSheet.getRow(rownum);
 		    String payload = getPayload(headerRow, currentRow);
 		    if (payload != null) {
@@ -133,11 +138,11 @@ public class SendEvent implements Runnable {
 	private String getPayload(XSSFRow headerRow, XSSFRow currentRow) {
 		String payload = null;
 		try {
-			StringBuilder payloadBuilder = new StringBuilder("{");
+		    ObjectNode payloadNode = MAPPER.createObjectNode();
+		    ObjectNode propertiesNode = MAPPER.createObjectNode();
 			Iterator<Cell> cellIterator = currentRow.cellIterator();
 			int cellIndex = 0;
 			int mandatoryFields = 0;
-			StringBuilder propertiesBuilder = new StringBuilder();
 			while(cellIterator.hasNext()) {
 				Cell cell = cellIterator.next();
 				if (cell != null) {
@@ -153,87 +158,79 @@ public class SendEvent implements Runnable {
 					}
 					String headerCell = headerRow.getCell(cellIndex).getStringCellValue();
 					if (TITLE.equalsIgnoreCase(headerCell)) {
-						payloadBuilder.append("\"").append(TITLE).append("\": \"").append(cellValue).append("\",");
+					    payloadNode.put(TITLE, cellValue);
 						mandatoryFields++;
 					} else if (SOURCE.equalsIgnoreCase(headerCell)) {
 						String[] sourceArray = cellValue.split(",");
 						String sourceRef = sourceArray[0].trim();
 						String sourceType = sourceArray[1].trim();
-						payloadBuilder.append("\"").append(SOURCE).append("\": {")
-			                .append("\"").append(REF).append("\": \"").append(sourceRef).append("\",")
-			                .append("\"").append(TYPE).append("\": \"").append(sourceType).append("\"");
+						ObjectNode sourceNode = MAPPER.createObjectNode();
+						sourceNode.put(REF, sourceRef);
+						sourceNode.put(TYPE, sourceType);
 					    if (sourceArray.length == 3) {
 					    	String sourceName = sourceArray[2].trim();
-					    	payloadBuilder.append(",\"").append(NAME).append("\": \"").append(sourceName).append("\"");
+					    	sourceNode.put(NAME, sourceName);
 					    }
-					    payloadBuilder.append("},");
+					    payloadNode.set(SOURCE, sourceNode);
 					    mandatoryFields++;
 					} else if (SENDER.equalsIgnoreCase(headerCell)) {
 						String[] senderArray = cellValue.split(",");
-						payloadBuilder.append("\"").append(SENDER).append("\": {");
+						ObjectNode senderNode = MAPPER.createObjectNode();
 						if (senderArray.length >= 1) {
 							String senderRef = senderArray[0].trim();
-							payloadBuilder.append("\"").append(REF).append("\": \"").append(senderRef).append("\",");
+							senderNode.put(REF, senderRef);
 						}
 						if (senderArray.length >= 2) {
 							String senderType = senderArray[1].trim();
-							payloadBuilder.append("\"").append(TYPE).append("\": \"").append(senderType).append("\",");
+							senderNode.put(TYPE, senderType);
 						}
 					    if (senderArray.length == 3) {
 					    	String senderName = senderArray[2].trim();
-					    	payloadBuilder.append("\"").append(NAME).append("\": \"").append(senderName).append("\",");
+					    	senderNode.put(NAME, senderName);
 					    }
-					    payloadBuilder.deleteCharAt(payloadBuilder.length() - 1).append("},");
+					    payloadNode.set(SENDER, senderNode);
 					} else if (FINGER_PRINT_FIELDS.equalsIgnoreCase(headerCell)) {
 						String[] fingerprintFieldsArray = cellValue.split(",");
+						ArrayNode fingerprintFieldsNode = MAPPER.createArrayNode();
 						Set<String> fingerprintFields = Sets.newHashSet(fingerprintFieldsArray);
-						payloadBuilder.append("\"").append(FINGER_PRINT_FIELDS).append("\": [");
 				        for (String fingerprintField : fingerprintFields) {
 				        	String fingerprintFieldTrimmed = fingerprintField.trim();
 				        	String fingerprintFieldLowerCase = fingerprintField.toLowerCase();
 				        	if (TAGGED_FINGERPRINTFIELDS.contains(fingerprintFieldLowerCase)) {
 				        		fingerprintFieldTrimmed = String.format("@%s", fingerprintFieldTrimmed);
 				        	}
-				        	payloadBuilder.append("\"").append(fingerprintFieldTrimmed).append("\",");
+				        	fingerprintFieldsNode.add(fingerprintFieldTrimmed);
 				        }
-				        payloadBuilder.deleteCharAt(payloadBuilder.length() - 1);
-				        payloadBuilder.append("],");
+				        payloadNode.set(FINGER_PRINT_FIELDS, fingerprintFieldsNode);
 				        mandatoryFields++;
 					} else if (SEVERITY.equalsIgnoreCase(headerCell)) {
-						payloadBuilder.append("\"").append(SEVERITY).append("\": \"").append(cellValue).append("\",");
+					    payloadNode.put(SEVERITY, cellValue);
 					} else if (STATUS.equalsIgnoreCase(headerCell)) {
-						payloadBuilder.append("\"").append(STATUS).append("\": \"").append(cellValue).append("\",");
+					    payloadNode.put(STATUS, cellValue);
 					} else if (MESSAGE.equalsIgnoreCase(headerCell)) {
-						payloadBuilder.append("\"").append(MESSAGE).append("\": \"").append(cellValue).append("\",");
+					    payloadNode.put(MESSAGE, cellValue);
 					} else if (CREATED_AT.equalsIgnoreCase(headerCell)) {
-						payloadBuilder.append("\"").append(CREATED_AT).append("\": \"").append(cellValue).append("\",");
+					    payloadNode.put(CREATED_AT, cellValue);
 					} else if (EVENT_CLASS.equalsIgnoreCase(headerCell)) {
-						payloadBuilder.append("\"").append(EVENT_CLASS).append("\": \"").append(cellValue).append("\",");
+					    payloadNode.put(EVENT_CLASS, cellValue);
 					} else if (TAGS.equalsIgnoreCase(headerCell)) {
 						String[] tagsArray = cellValue.split(",");
 						Set<String> tags = Sets.newHashSet(tagsArray);
-						payloadBuilder.append("\"").append(TAGS).append("\": [");
+						ArrayNode tagsNode = MAPPER.createArrayNode();
 						for (String tag :tags) {
 							String tagTrimmed = tag.trim();
-							payloadBuilder.append("\"").append(tagTrimmed).append("\",");
+							tagsNode.add(tagTrimmed);
 						}
-						payloadBuilder.deleteCharAt(payloadBuilder.length() - 1);
-						payloadBuilder.append("],");
+						payloadNode.put(TAGS, cellValue);
 					} else {
-						if (propertiesBuilder.length() == 0) {
-							propertiesBuilder.append("\"").append(PROPERTIES).append("\": {");
-						}
-						propertiesBuilder.append("\"").append(headerCell).append("\":")
-						    .append("\"").append(cellValue).append("\",");
+						propertiesNode.put(headerCell, cellValue);
 					}
 				}
 			}
-			if (propertiesBuilder.length() != 0) {
-				propertiesBuilder.deleteCharAt(propertiesBuilder.length() - 1).append("}");
-				payloadBuilder.append(propertiesBuilder.toString());
+			if (propertiesNode.size() > 0) {
+				payloadNode.set(PROPERTIES, propertiesNode);
 			}
-			payloadBuilder.append("}");
-			payload = payloadBuilder.toString();
+			payload = payloadNode.toString();
 			int payloadBytes = payload.getBytes(UTF_8).length;
 			if (payloadBytes > MAX_EVENT_SIZE) {
 				LOGGER.error("Request size [{}] bytes too large, must be under 32768 bytes for row [{}] ", payloadBytes, currentRow.getRowNum()+1);
