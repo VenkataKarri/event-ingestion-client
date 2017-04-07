@@ -141,9 +141,9 @@ public class SendEvent implements Runnable {
         try {
             ObjectNode payloadNode = MAPPER.createObjectNode();
             ObjectNode propertiesNode = MAPPER.createObjectNode();
+            ObjectNode sourceNode = MAPPER.createObjectNode();
             Iterator<Cell> cellIterator = currentRow.cellIterator();
             int cellIndex = 0;
-            int mandatoryFields = 0;
             while(cellIterator.hasNext()) {
                 Cell cell = cellIterator.next();
                 if (cell != null) {
@@ -160,20 +160,21 @@ public class SendEvent implements Runnable {
                     String headerCell = headerRow.getCell(cellIndex).getStringCellValue();
                     if (TITLE.equalsIgnoreCase(headerCell)) {
                         payloadNode.put(TITLE, cellValue);
-                        mandatoryFields++;
                     } else if (SOURCE.equalsIgnoreCase(headerCell)) {
                         String[] sourceArray = cellValue.split(",");
-                        String sourceRef = sourceArray[0].trim();
-                        String sourceType = sourceArray[1].trim();
-                        ObjectNode sourceNode = MAPPER.createObjectNode();
-                        sourceNode.put(REF, sourceRef);
-                        sourceNode.put(TYPE, sourceType);
+                        if (sourceArray.length >= 1) {
+                            String sourceRef = sourceArray[0].trim();
+                            sourceNode.put(REF, sourceRef);
+                        }
+                        if (sourceArray.length >= 2) {
+                            String sourceType = sourceArray[1].trim();
+                            sourceNode.put(TYPE, sourceType);
+                        }
                         if (sourceArray.length == 3) {
                             String sourceName = sourceArray[2].trim();
                             sourceNode.put(NAME, sourceName);
                         }
                         payloadNode.set(SOURCE, sourceNode);
-                        mandatoryFields++;
                     } else if (SENDER.equalsIgnoreCase(headerCell)) {
                         String[] senderArray = cellValue.split(",");
                         ObjectNode senderNode = MAPPER.createObjectNode();
@@ -203,7 +204,6 @@ public class SendEvent implements Runnable {
                             fingerprintFieldsNode.add(fingerprintFieldTrimmed);
                         }
                         payloadNode.set(FINGER_PRINT_FIELDS, fingerprintFieldsNode);
-                        mandatoryFields++;
                     } else if (SEVERITY.equalsIgnoreCase(headerCell)) {
                         payloadNode.put(SEVERITY, cellValue);
                     } else if (STATUS.equalsIgnoreCase(headerCell)) {
@@ -228,6 +228,10 @@ public class SendEvent implements Runnable {
                     }
                 }
             }
+            if (!(sourceNode.size() >= 2 && payloadNode.has(FINGER_PRINT_FIELDS) && payloadNode.has(TITLE))) {
+                LOGGER.error("Mandatory Fields i.e title, source.ref, source.type and/or fingerprintfields missing in the row [{}]: ", currentRow.getRowNum()+1);
+                return null;
+            }
             if (propertiesNode.size() > MAX_EVENT_FIELDS) {
                 LOGGER.error("Event properties field count of [{}] exceeds maximum of [{}] for row [{}]", propertiesNode.size(), MAX_EVENT_FIELDS, currentRow.getRowNum()+1);
                 return null;
@@ -239,10 +243,6 @@ public class SendEvent implements Runnable {
             int payloadBytes = payload.getBytes(UTF_8).length;
             if (payloadBytes > MAX_EVENT_SIZE) {
                 LOGGER.error("Request size [{}] bytes too large, must be under [{}] bytes for row [{}] ", payloadBytes, MAX_EVENT_SIZE, currentRow.getRowNum()+1);
-                return null;
-            }
-            if (mandatoryFields != 3) {
-                LOGGER.error("Mandatory Fields i.e title, source and/or fingerprintfields are missing in the row [{}]: ", currentRow.getRowNum()+1);
                 return null;
             }
             LOGGER.debug("payload: [{}]", payload);
