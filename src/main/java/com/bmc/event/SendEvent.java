@@ -44,6 +44,7 @@ public class SendEvent implements Runnable {
     private static Client CLIENT = getClient();
     	
     private static final int MAX_EVENT_SIZE = 32768;
+    private static final int MAX_EVENT_FIELDS = 128;
     private static final String UTF_8 = "UTF-8";
     	
     private static final String TITLE = "title";
@@ -227,13 +228,17 @@ public class SendEvent implements Runnable {
                     }
                 }
             }
+            if (propertiesNode.size() > MAX_EVENT_FIELDS) {
+                LOGGER.error("Event properties field count of [{}] exceeds maximum of [{}] for row [{}]", propertiesNode.size(), MAX_EVENT_FIELDS, currentRow.getRowNum()+1);
+                return null;
+            }
             if (propertiesNode.size() > 0) {
                 payloadNode.set(PROPERTIES, propertiesNode);
             }
             payload = payloadNode.toString();
             int payloadBytes = payload.getBytes(UTF_8).length;
             if (payloadBytes > MAX_EVENT_SIZE) {
-                LOGGER.error("Request size [{}] bytes too large, must be under 32768 bytes for row [{}] ", payloadBytes, currentRow.getRowNum()+1);
+                LOGGER.error("Request size [{}] bytes too large, must be under [{}] bytes for row [{}] ", payloadBytes, MAX_EVENT_SIZE, currentRow.getRowNum()+1);
                 return null;
             }
             if (mandatoryFields != 3) {
