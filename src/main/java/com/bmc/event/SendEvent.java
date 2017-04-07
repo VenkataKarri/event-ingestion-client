@@ -249,35 +249,35 @@ public class SendEvent implements Runnable {
     	
     private static String escape(String value) {
         StringBuilder sb = new StringBuilder();
-        for(int i = 0; i < value.length(); i++){
+        for(int i = 0; i < value.length(); i++) {
             char ch = value.charAt(i);
-            switch(ch){
-            case '"':
-                sb.append("\\\"");
-                break;
-            case '\\':
-                sb.append("\\\\");
-                break;
-            case '\b':
-                sb.append("\\b");
-                break;
-            case '\f':
-                sb.append("\\f");
-                break;
-            case '\n':
-                sb.append("\\n");
-                break;
-            case '\r':
-                sb.append("\\r");
-                break;
-            case '\t':
-                sb.append("\\t");
-                break;
-            case '/':
-                sb.append("\\/");
-                break;
-            default:
-                sb.append(ch);
+            switch(ch) {
+                case '"':
+                    sb.append("\\\"");
+                    break;
+                case '\\':
+                    sb.append("\\\\");
+                    break;
+                case '\b':
+                    sb.append("\\b");
+                    break;
+                case '\f':
+                    sb.append("\\f");
+                    break;
+                case '\n':
+                    sb.append("\\n");
+                    break;
+                case '\r':
+                    sb.append("\\r");
+                    break;
+                case '\t':
+                    sb.append("\\t");
+                    break;
+                case '/':
+                    sb.append("\\/");
+                    break;
+                default:
+                    sb.append(ch);
             }
         }
         return sb.toString();
