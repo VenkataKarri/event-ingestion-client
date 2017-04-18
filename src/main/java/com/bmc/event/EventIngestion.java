@@ -8,6 +8,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.openxml4j.opc.PackageAccess;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
@@ -30,10 +32,9 @@ public class EventIngestion {
         String filePath = args[3];
         LOGGER.info("Started: [{}]", sdf.format(new Date(System.currentTimeMillis())));
         ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
-        File file = new File(filePath);
         XSSFSheet xssfSheet = null;
-        try (FileInputStream fis = new FileInputStream(file);
-                XSSFWorkbook xssfWorkbook = new XSSFWorkbook (fis);) {
+        try (OPCPackage pkg = OPCPackage.open(filePath, PackageAccess.READ);
+                XSSFWorkbook xssfWorkbook = new XSSFWorkbook (pkg);) {
             xssfSheet = xssfWorkbook.getSheetAt(0); 
             for (int i=1; i<=THREAD_COUNT; i++) {
             	SendEvent worker = new SendEvent(url, email, apiKey, xssfSheet);
