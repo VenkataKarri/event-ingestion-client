@@ -17,6 +17,7 @@ import javax.ws.rs.core.Response;
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.util.NumberToTextConverter;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -66,16 +67,18 @@ public class SendEvent implements Runnable {
     	
     private static final ImmutableSet<String> TAGGED_FINGERPRINTFIELDS = ImmutableSet.of(TITLE, MESSAGE, STATUS, SEVERITY, SOURCE_NAME);
     	
-    private XSSFSheet xssfSheet;
+    private Row headerRow;
+    private Row currentRow;
     private String url;
     private String email;
     private String apiKey;
 	
-    public SendEvent(String url, String email, String apiKey, XSSFSheet xssfSheet) {
+    public SendEvent(String url, String email, String apiKey, Row headerRow, Row currentRow) {
         this.url = url;
         this.email = email;
         this.apiKey = apiKey;
-        this.xssfSheet = xssfSheet;
+        this.headerRow = headerRow;
+        this.currentRow = currentRow;
     }
     	
     public static Client getClient() {
@@ -117,26 +120,13 @@ public class SendEvent implements Runnable {
 
     @Override
     public void run() {
-        int count = 0;
-        XSSFRow headerRow = xssfSheet.getRow(0);
-        while (true) {
-            int rownum = ROW_NUMBER.get();
-            XSSFRow currentRow = xssfSheet.getRow(rownum);
-            if (currentRow == null) {
-                LOGGER.debug("Number of rows processed: [{}]", count);
-                break;
-            }
-            rownum = ROW_NUMBER.getAndIncrement();
-            currentRow = xssfSheet.getRow(rownum);
-            String payload = getPayload(headerRow, currentRow);
-            if (payload != null) {
-                sendEvent(payload, rownum);
-            }
-            count++;
+        String payload = getPayload(headerRow, currentRow);
+        if (payload != null) {
+        	sendEvent(payload, currentRow.getRowNum());
         }
     }
     	
-    private String getPayload(XSSFRow headerRow, XSSFRow currentRow) {
+    private String getPayload(Row headerRow, Row currentRow) {
         String payload = null;
         try {
             ObjectNode payloadNode = MAPPER.createObjectNode();
@@ -245,7 +235,7 @@ public class SendEvent implements Runnable {
                 LOGGER.error("Request size [{}] bytes too large, must be under [{}] bytes for row [{}] ", payloadBytes, MAX_EVENT_SIZE, currentRow.getRowNum()+1);
                 return null;
             }
-            LOGGER.debug("payload: [{}]", payload);
+            LOGGER.debug("row [{}] payload: [{}]", currentRow.getRowNum(), payload);
         } catch (Exception e) {
             LOGGER.error("Error parsing the row [{}]: ", currentRow.getRowNum()+1, e);
         }
