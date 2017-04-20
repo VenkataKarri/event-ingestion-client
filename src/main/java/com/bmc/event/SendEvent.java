@@ -19,8 +19,6 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.util.NumberToTextConverter;
-import org.apache.poi.xssf.usermodel.XSSFRow;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.jboss.resteasy.client.jaxrs.BasicAuthentication;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.jboss.resteasy.client.jaxrs.engines.ApacheHttpClient4Engine;
@@ -122,7 +120,7 @@ public class SendEvent implements Runnable {
     public void run() {
         String payload = getPayload(headerRow, currentRow);
         if (payload != null) {
-        	sendEvent(payload, currentRow.getRowNum());
+            sendEvent(payload, currentRow.getRowNum());
         }
     }
     	
