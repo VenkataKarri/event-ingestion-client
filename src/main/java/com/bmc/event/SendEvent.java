@@ -1,12 +1,10 @@
 package com.bmc.event;
 
-import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
@@ -16,12 +14,15 @@ import javax.ws.rs.core.Response;
 
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.poi.hssf.usermodel.HSSFDateUtil;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.util.NumberToTextConverter;
 import org.jboss.resteasy.client.jaxrs.BasicAuthentication;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.jboss.resteasy.client.jaxrs.engines.ApacheHttpClient4Engine;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,9 +38,8 @@ import com.google.common.collect.Sets;
 
 public class SendEvent implements Runnable {
     private static final Logger LOGGER = LoggerFactory.getLogger(SendEvent.class);
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+    private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSS");
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    public static AtomicInteger ROW_NUMBER = new AtomicInteger(1);
     private static Client CLIENT = getClient();
     	
     private static final int MAX_EVENT_SIZE = 32768;
@@ -102,13 +102,13 @@ public class SendEvent implements Runnable {
             response = target.request().post(Entity.entity(payload, MediaType.APPLICATION_JSON));
             int status = response.getStatus();
             if (status == Response.Status.ACCEPTED.getStatusCode()) {
-                LOGGER.debug("Successfully sent event at time: [{}]", sdf.format(new Date(createdAt)));
+                LOGGER.debug("Successfully sent event at time: [{}]", DATE_TIME_FORMAT.print(createdAt));
             } else {
                 String errorMsg = response.readEntity(String.class);
-                LOGGER.error("Failed for Row [{}]: HTTP error code : [{}] at time: [{}] with error msg: [{}]", rownum+1 , response.getStatus(), sdf.format(new Date(createdAt)), errorMsg);
+                LOGGER.error("Failed for Row [{}]: HTTP error code : [{}] at time: [{}] with error msg: [{}]", rownum+1 , response.getStatus(), DATE_TIME_FORMAT.print(createdAt), errorMsg);
             }
         } catch (Exception e) {
-            LOGGER.error("Error creating event for Row [{}] at time [{}]: ", rownum+1, sdf.format(new Date(createdAt)), e);
+            LOGGER.error("Error creating event for Row [{}] at time [{}]: ", rownum+1, DATE_TIME_FORMAT.print(createdAt), e);
         } finally {
             if (response != null) {
                 response.close();
@@ -136,9 +136,14 @@ public class SendEvent implements Runnable {
                 Cell cell = cellIterator.next();
                 if (cell != null) {
                     cellIndex = cell.getColumnIndex();
-                    String cellValue;
+                    String cellValue = "";
                     if(cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
-                        cellValue = NumberToTextConverter.toText(cell.getNumericCellValue()).trim();
+                        if (HSSFDateUtil.isCellDateFormatted(cell)) {
+                            Date dateCellValue = cell.getDateCellValue();
+                            cellValue = String.valueOf(dateCellValue.getTime());
+                        } else {
+                            cellValue = NumberToTextConverter.toText(cell.getNumericCellValue()).trim();
+                        }
                     } else {
                         cellValue = escape(cell.getStringCellValue().trim());
                     }
@@ -199,7 +204,7 @@ public class SendEvent implements Runnable {
                     } else if (MESSAGE.equalsIgnoreCase(headerCell)) {
                         payloadNode.put(MESSAGE, cellValue);
                     } else if (CREATED_AT.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(CREATED_AT, cellValue);
+                        payloadNode.put(CREATED_AT, Long.valueOf(cellValue));
                     } else if (EVENT_CLASS.equalsIgnoreCase(headerCell)) {
                         payloadNode.put(EVENT_CLASS, cellValue);
                     } else if (TAGS.equalsIgnoreCase(headerCell)) {
