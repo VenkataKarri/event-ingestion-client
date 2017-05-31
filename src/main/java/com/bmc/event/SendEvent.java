@@ -145,7 +145,7 @@ public class SendEvent implements Runnable {
                             cellValue = NumberToTextConverter.toText(cell.getNumericCellValue()).trim();
                         }
                     } else {
-                        cellValue = escape(cell.getStringCellValue().trim());
+                    	cellValue = cell.getStringCellValue().trim();
                     }
                     if (cellValue.isEmpty()) {
                         continue;
@@ -245,41 +245,6 @@ public class SendEvent implements Runnable {
         return payload;
     }
     	
-    private static String escape(String value) {
-        StringBuilder sb = new StringBuilder();
-        for(int i = 0; i < value.length(); i++) {
-            char ch = value.charAt(i);
-            switch(ch) {
-                case '"':
-                    sb.append("\\\"");
-                    break;
-                case '\\':
-                    sb.append("\\\\");
-                    break;
-                case '\b':
-                    sb.append("\\b");
-                    break;
-                case '\f':
-                    sb.append("\\f");
-                    break;
-                case '\n':
-                    sb.append("\\n");
-                    break;
-                case '\r':
-                    sb.append("\\r");
-                    break;
-                case '\t':
-                    sb.append("\\t");
-                    break;
-                case '/':
-                    sb.append("\\/");
-                    break;
-                default:
-                    sb.append(ch);
-            }
-        }
-        return sb.toString();
-    }
 }
 
 
