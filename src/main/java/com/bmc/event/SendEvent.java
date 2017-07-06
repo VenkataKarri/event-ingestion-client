@@ -5,6 +5,8 @@ import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
@@ -17,7 +19,6 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.poi.hssf.usermodel.HSSFDateUtil;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.util.NumberToTextConverter;
 import org.jboss.resteasy.client.jaxrs.BasicAuthentication;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.jboss.resteasy.client.jaxrs.engines.ApacheHttpClient4Engine;
@@ -136,25 +137,22 @@ public class SendEvent implements Runnable {
                 Cell cell = cellIterator.next();
                 if (cell != null) {
                     cellIndex = cell.getColumnIndex();
-                    String cellValue = "";
+                    Object cellValue = null;
                     if(cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
                         if (HSSFDateUtil.isCellDateFormatted(cell)) {
                             Date dateCellValue = cell.getDateCellValue();
-                            cellValue = String.valueOf(dateCellValue.getTime());
+                            cellValue = dateCellValue.getTime();
                         } else {
-                            cellValue = NumberToTextConverter.toText(cell.getNumericCellValue()).trim();
+                            cellValue = cell.getNumericCellValue();
                         }
                     } else {
                     	cellValue = cell.getStringCellValue().trim();
                     }
-                    if (cellValue.isEmpty()) {
-                        continue;
-                    }
                     String headerCell = headerRow.getCell(cellIndex).getStringCellValue();
                     if (TITLE.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(TITLE, cellValue);
+                        payloadNode.put(TITLE, cellValue.toString());
                     } else if (SOURCE.equalsIgnoreCase(headerCell)) {
-                        String[] sourceArray = cellValue.split(",");
+                        String[] sourceArray = cellValue.toString().split(",");
                         if (sourceArray.length >= 1) {
                             String sourceRef = sourceArray[0].trim();
                             sourceNode.put(REF, sourceRef);
@@ -169,7 +167,7 @@ public class SendEvent implements Runnable {
                         }
                         payloadNode.set(SOURCE, sourceNode);
                     } else if (SENDER.equalsIgnoreCase(headerCell)) {
-                        String[] senderArray = cellValue.split(",");
+                        String[] senderArray = cellValue.toString().split(",");
                         ObjectNode senderNode = MAPPER.createObjectNode();
                         if (senderArray.length >= 1) {
                             String senderRef = senderArray[0].trim();
@@ -185,7 +183,7 @@ public class SendEvent implements Runnable {
                         }
                         payloadNode.set(SENDER, senderNode);
                     } else if (FINGER_PRINT_FIELDS.equalsIgnoreCase(headerCell)) {
-                        String[] fingerprintFieldsArray = cellValue.split(",");
+                        String[] fingerprintFieldsArray = cellValue.toString().split(",");
                         ArrayNode fingerprintFieldsNode = MAPPER.createArrayNode();
                         Set<String> fingerprintFields = Sets.newHashSet(fingerprintFieldsArray);
                         for (String fingerprintField : fingerprintFields) {
@@ -198,26 +196,26 @@ public class SendEvent implements Runnable {
                         }
                         payloadNode.set(FINGER_PRINT_FIELDS, fingerprintFieldsNode);
                     } else if (SEVERITY.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(SEVERITY, cellValue);
+                        payloadNode.put(SEVERITY, cellValue.toString());
                     } else if (STATUS.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(STATUS, cellValue);
+                        payloadNode.put(STATUS, cellValue.toString());
                     } else if (MESSAGE.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(MESSAGE, cellValue);
+                        payloadNode.put(MESSAGE, cellValue.toString());
                     } else if (CREATED_AT.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(CREATED_AT, Long.valueOf(cellValue));
+                        payloadNode.put(CREATED_AT, Long.valueOf(cellValue.toString()));
                     } else if (EVENT_CLASS.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(EVENT_CLASS, cellValue);
+                        payloadNode.put(EVENT_CLASS, cellValue.toString());
                     } else if (TAGS.equalsIgnoreCase(headerCell)) {
-                        String[] tagsArray = cellValue.split(",");
+                        String[] tagsArray = cellValue.toString().split(",");
                         Set<String> tags = Sets.newHashSet(tagsArray);
                         ArrayNode tagsNode = MAPPER.createArrayNode();
                         for (String tag :tags) {
                             String tagTrimmed = tag.trim();
                             tagsNode.add(tagTrimmed);
                         }
-                        payloadNode.put(TAGS, cellValue);
+                        payloadNode.set(TAGS, tagsNode);
                     } else {
-                        propertiesNode.put(headerCell, cellValue);
+                        setValue(propertiesNode, headerCell, cellValue);
                     }
                 }
             }
@@ -244,7 +242,41 @@ public class SendEvent implements Runnable {
         }
         return payload;
     }
-    	
+
+    private static void setValue(ObjectNode node, String pkey, Object pval) {
+        if (pval == null) {
+            return;
+        }
+        if (pval instanceof String) {
+            node.put(pkey, pval.toString());
+        } else if (pval instanceof Number) {
+            writeNumber(node, pkey, (Number) pval);
+        } else if (pval instanceof Boolean) {
+            node.put(pkey, ((Boolean) pval).booleanValue());
+        } else {
+            // If not one of the preceding types, treat as a string
+            node.put(pkey, pval.toString());
+        }
+    }
+
+    private static void writeNumber(ObjectNode node, String pkey, Number n) {
+        if (n == null) {
+            return;
+        }
+        if (n instanceof Long || n instanceof AtomicLong) {
+            node.put(pkey, n.longValue());
+        } else if (n instanceof Integer || n instanceof AtomicInteger || n instanceof Byte
+                        || n instanceof Short) {
+            node.put(pkey, n.intValue());
+        } else if (n instanceof Float) {
+            node.put(pkey, n.floatValue());
+        } else if (n instanceof Double) {
+            node.put(pkey, n.doubleValue());
+        } else {
+            throw new IllegalArgumentException(
+                            "unsupported number type: " + n.getClass().getName());
+        }
+    }
 }
 
 

@@ -13,6 +13,9 @@ The program accepts four required parameters
 
 If using an IDE like Eclipse you need to run EventIngestion class with above parameters as arguments
 (or)
+From command line: You need to build the maven project for the jar to be generated i.e
+Run, mvn clean install on event-ingestion-client directory which will generate event-ingestion-client.jar under /event-ingestion-client/target folder.
+Then you can run the following from the target folder
 java -cp event-ingestion-client.jar com.bmc.event.EventIngestion $url $email $apiKey $filepath
 
 As this is a multithreaded program we can't guarantee the order of execution of the rows in the Excel sheet.
