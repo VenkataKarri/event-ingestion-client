@@ -5,8 +5,6 @@ import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
@@ -18,6 +16,7 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.poi.hssf.usermodel.HSSFDateUtil;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.jboss.resteasy.client.jaxrs.BasicAuthentication;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
@@ -137,18 +136,39 @@ public class SendEvent implements Runnable {
                 Cell cell = cellIterator.next();
                 if (cell != null) {
                     cellIndex = cell.getColumnIndex();
+                    String headerCell = headerRow.getCell(cellIndex).getStringCellValue();
                     Object cellValue = null;
-                    if(cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
+                    if(cell.getCellTypeEnum() == CellType.NUMERIC) {
                         if (HSSFDateUtil.isCellDateFormatted(cell)) {
                             Date dateCellValue = cell.getDateCellValue();
                             cellValue = dateCellValue.getTime();
                         } else {
-                            cellValue = cell.getNumericCellValue();
+                            double numericCellValue = cell.getNumericCellValue();
+                            if (numericCellValue == (long)numericCellValue) {
+                                cellValue = (long)numericCellValue;
+                            } else {
+                                cellValue = numericCellValue;
+                            }
                         }
+                    } else if(cell.getCellTypeEnum() == CellType.FORMULA) {
+                        CellType cachedFormulaResultTypeEnum = cell.getCachedFormulaResultTypeEnum();
+                        if (cachedFormulaResultTypeEnum == CellType.NUMERIC) {
+                            double numericCellValue = cell.getNumericCellValue();
+                            if (numericCellValue == (long)numericCellValue) {
+                                cellValue = (long)numericCellValue;
+                            } else {
+                                cellValue = numericCellValue;
+                            }
+                        } else if (cachedFormulaResultTypeEnum == CellType.BOOLEAN) {
+                            cellValue = cell.getBooleanCellValue();
+                        } else {
+                            cellValue = cell.getStringCellValue().trim();
+                        }
+                    } else if(cell.getCellTypeEnum() == CellType.BOOLEAN) {
+                        cellValue = cell.getBooleanCellValue();
                     } else {
-                    	cellValue = cell.getStringCellValue().trim();
+                        cellValue = cell.getStringCellValue().trim();
                     }
-                    String headerCell = headerRow.getCell(cellIndex).getStringCellValue();
                     if (TITLE.equalsIgnoreCase(headerCell)) {
                         payloadNode.put(TITLE, cellValue.toString());
                     } else if (SOURCE.equalsIgnoreCase(headerCell)) {
@@ -263,18 +283,13 @@ public class SendEvent implements Runnable {
         if (n == null) {
             return;
         }
-        if (n instanceof Long || n instanceof AtomicLong) {
+        if (n instanceof Long) {
             node.put(pkey, n.longValue());
-        } else if (n instanceof Integer || n instanceof AtomicInteger || n instanceof Byte
-                        || n instanceof Short) {
-            node.put(pkey, n.intValue());
-        } else if (n instanceof Float) {
-            node.put(pkey, n.floatValue());
         } else if (n instanceof Double) {
             node.put(pkey, n.doubleValue());
         } else {
             throw new IllegalArgumentException(
-                            "unsupported number type: " + n.getClass().getName());
+                            "unexpected number type: " + n.getClass().getName());
         }
     }
 }

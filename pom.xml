@@ -18,10 +18,10 @@
        <resteasy.version>3.0.14.Final</resteasy.version>
        <slf4j.version>1.7.10</slf4j.version>
        <log4j.version>1.2.17</log4j.version>
-       <poi.version>3.15</poi.version>
+       <poi.version>3.16</poi.version>
        <xmlbeans.version>2.6.0</xmlbeans.version>
        <commons-collections4.version>4.1</commons-collections4.version>
-       <xlsx-streamer.version>1.1.0</xlsx-streamer.version>
+       <xlsx-streamer.version>1.2.0</xlsx-streamer.version>
        <joda-time.version>2.9.9</joda-time.version>
        <mainClass>com.bmc.event.EventIngestion</mainClass>
    </properties>
