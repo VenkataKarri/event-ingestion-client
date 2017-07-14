@@ -18,6 +18,7 @@ import org.apache.poi.hssf.usermodel.HSSFDateUtil;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.util.NumberToTextConverter;
 import org.jboss.resteasy.client.jaxrs.BasicAuthentication;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.jboss.resteasy.client.jaxrs.engines.ApacheHttpClient4Engine;
@@ -143,21 +144,33 @@ public class SendEvent implements Runnable {
                             Date dateCellValue = cell.getDateCellValue();
                             cellValue = dateCellValue.getTime();
                         } else {
-                            double numericCellValue = cell.getNumericCellValue();
-                            if (numericCellValue == (long)numericCellValue) {
-                                cellValue = (long)numericCellValue;
-                            } else {
-                                cellValue = numericCellValue;
+                            String text = NumberToTextConverter.toText(cell.getNumericCellValue());
+                            cellValue = text;
+                            try {
+                                cellValue = Double.parseDouble(text);
+                            } catch(NumberFormatException e) {
+                                //Ignore
+                            }
+                            try {
+                                cellValue = Long.parseLong(text);
+                            } catch(NumberFormatException e) {
+                                //Ignore
                             }
                         }
                     } else if(cell.getCellTypeEnum() == CellType.FORMULA) {
                         CellType cachedFormulaResultTypeEnum = cell.getCachedFormulaResultTypeEnum();
                         if (cachedFormulaResultTypeEnum == CellType.NUMERIC) {
-                            double numericCellValue = cell.getNumericCellValue();
-                            if (numericCellValue == (long)numericCellValue) {
-                                cellValue = (long)numericCellValue;
-                            } else {
-                                cellValue = numericCellValue;
+                            String text = NumberToTextConverter.toText(cell.getNumericCellValue());
+                            cellValue = text;
+                            try {
+                                cellValue = Double.parseDouble(text);
+                            } catch(NumberFormatException e) {
+                                //Ignore
+                            }
+                            try {
+                                cellValue = Long.parseLong(text);
+                            } catch(NumberFormatException e) {
+                                //Ignore
                             }
                         } else if (cachedFormulaResultTypeEnum == CellType.BOOLEAN) {
                             cellValue = cell.getBooleanCellValue();
