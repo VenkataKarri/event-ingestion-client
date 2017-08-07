@@ -138,54 +138,28 @@ public class SendEvent implements Runnable {
                 if (cell != null) {
                     cellIndex = cell.getColumnIndex();
                     String headerCell = headerRow.getCell(cellIndex).getStringCellValue();
-                    Object cellValue = null;
+                    String cellValue = "";
                     if(cell.getCellTypeEnum() == CellType.NUMERIC) {
                         if (HSSFDateUtil.isCellDateFormatted(cell)) {
                             Date dateCellValue = cell.getDateCellValue();
-                            cellValue = dateCellValue.getTime();
+                            cellValue = String.valueOf(dateCellValue.getTime());
                         } else {
-                            String text = NumberToTextConverter.toText(cell.getNumericCellValue());
-                            cellValue = text;
-                            try {
-                                cellValue = Double.parseDouble(text);
-                            } catch(NumberFormatException e) {
-                                //Ignore
-                            }
-                            try {
-                                cellValue = Long.parseLong(text);
-                            } catch(NumberFormatException e) {
-                                //Ignore
-                            }
+                            cellValue = NumberToTextConverter.toText(cell.getNumericCellValue());
                         }
                     } else if(cell.getCellTypeEnum() == CellType.FORMULA) {
                         CellType cachedFormulaResultTypeEnum = cell.getCachedFormulaResultTypeEnum();
                         if (cachedFormulaResultTypeEnum == CellType.NUMERIC) {
-                            String text = NumberToTextConverter.toText(cell.getNumericCellValue());
-                            cellValue = text;
-                            try {
-                                cellValue = Double.parseDouble(text);
-                            } catch(NumberFormatException e) {
-                                //Ignore
-                            }
-                            try {
-                                cellValue = Long.parseLong(text);
-                            } catch(NumberFormatException e) {
-                                //Ignore
-                            }
-                        } else if (cachedFormulaResultTypeEnum == CellType.BOOLEAN) {
-                            cellValue = cell.getBooleanCellValue();
+                            cellValue = NumberToTextConverter.toText(cell.getNumericCellValue());
                         } else {
                             cellValue = cell.getStringCellValue().trim();
                         }
-                    } else if(cell.getCellTypeEnum() == CellType.BOOLEAN) {
-                        cellValue = cell.getBooleanCellValue();
                     } else {
                         cellValue = cell.getStringCellValue().trim();
                     }
                     if (TITLE.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(TITLE, cellValue.toString());
+                        payloadNode.put(TITLE, cellValue);
                     } else if (SOURCE.equalsIgnoreCase(headerCell)) {
-                        String[] sourceArray = cellValue.toString().split(",");
+                        String[] sourceArray = cellValue.split(",");
                         if (sourceArray.length >= 1) {
                             String sourceRef = sourceArray[0].trim();
                             sourceNode.put(REF, sourceRef);
@@ -200,7 +174,7 @@ public class SendEvent implements Runnable {
                         }
                         payloadNode.set(SOURCE, sourceNode);
                     } else if (SENDER.equalsIgnoreCase(headerCell)) {
-                        String[] senderArray = cellValue.toString().split(",");
+                        String[] senderArray = cellValue.split(",");
                         ObjectNode senderNode = MAPPER.createObjectNode();
                         if (senderArray.length >= 1) {
                             String senderRef = senderArray[0].trim();
@@ -216,7 +190,7 @@ public class SendEvent implements Runnable {
                         }
                         payloadNode.set(SENDER, senderNode);
                     } else if (FINGER_PRINT_FIELDS.equalsIgnoreCase(headerCell)) {
-                        String[] fingerprintFieldsArray = cellValue.toString().split(",");
+                        String[] fingerprintFieldsArray = cellValue.split(",");
                         ArrayNode fingerprintFieldsNode = MAPPER.createArrayNode();
                         Set<String> fingerprintFields = Sets.newHashSet(fingerprintFieldsArray);
                         for (String fingerprintField : fingerprintFields) {
@@ -229,17 +203,17 @@ public class SendEvent implements Runnable {
                         }
                         payloadNode.set(FINGER_PRINT_FIELDS, fingerprintFieldsNode);
                     } else if (SEVERITY.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(SEVERITY, cellValue.toString());
+                        payloadNode.put(SEVERITY, cellValue);
                     } else if (STATUS.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(STATUS, cellValue.toString());
+                        payloadNode.put(STATUS, cellValue);
                     } else if (MESSAGE.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(MESSAGE, cellValue.toString());
+                        payloadNode.put(MESSAGE, cellValue);
                     } else if (CREATED_AT.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(CREATED_AT, Long.valueOf(cellValue.toString()));
+                        payloadNode.put(CREATED_AT, Long.valueOf(cellValue));
                     } else if (EVENT_CLASS.equalsIgnoreCase(headerCell)) {
-                        payloadNode.put(EVENT_CLASS, cellValue.toString());
+                        payloadNode.put(EVENT_CLASS, cellValue);
                     } else if (TAGS.equalsIgnoreCase(headerCell)) {
-                        String[] tagsArray = cellValue.toString().split(",");
+                        String[] tagsArray = cellValue.split(",");
                         Set<String> tags = Sets.newHashSet(tagsArray);
                         ArrayNode tagsNode = MAPPER.createArrayNode();
                         for (String tag :tags) {
@@ -248,7 +222,7 @@ public class SendEvent implements Runnable {
                         }
                         payloadNode.set(TAGS, tagsNode);
                     } else {
-                        setValue(propertiesNode, headerCell, cellValue);
+                        propertiesNode.put(headerCell, cellValue);
                     }
                 }
             }
@@ -276,35 +250,6 @@ public class SendEvent implements Runnable {
         return payload;
     }
 
-    private static void setValue(ObjectNode node, String pkey, Object pval) {
-        if (pval == null) {
-            return;
-        }
-        if (pval instanceof String) {
-            node.put(pkey, pval.toString());
-        } else if (pval instanceof Number) {
-            writeNumber(node, pkey, (Number) pval);
-        } else if (pval instanceof Boolean) {
-            node.put(pkey, ((Boolean) pval).booleanValue());
-        } else {
-            // If not one of the preceding types, treat as a string
-            node.put(pkey, pval.toString());
-        }
-    }
-
-    private static void writeNumber(ObjectNode node, String pkey, Number n) {
-        if (n == null) {
-            return;
-        }
-        if (n instanceof Long) {
-            node.put(pkey, n.longValue());
-        } else if (n instanceof Double) {
-            node.put(pkey, n.doubleValue());
-        } else {
-            throw new IllegalArgumentException(
-                            "unexpected number type: " + n.getClass().getName());
-        }
-    }
 }
 
 

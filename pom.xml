@@ -2,7 +2,7 @@
    <modelVersion>4.0.0</modelVersion>
    <groupId>com.bmc.event</groupId>
    <artifactId>event-ingestion-client</artifactId>
-   <version>1.0</version>
+   <version>2.0</version>
    <packaging>jar</packaging>
    <url>http://maven.apache.org</url>
    <name>event-ingestion-client</name>
