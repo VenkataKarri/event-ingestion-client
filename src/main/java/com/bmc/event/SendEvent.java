@@ -138,6 +138,9 @@ public class SendEvent implements Runnable {
                 if (cell != null) {
                     cellIndex = cell.getColumnIndex();
                     String headerCell = headerRow.getCell(cellIndex).getStringCellValue();
+                    if (headerCell == null || headerCell.isEmpty()) {
+                        continue;
+                    }
                     String cellValue = "";
                     if(cell.getCellTypeEnum() == CellType.NUMERIC) {
                         if (HSSFDateUtil.isCellDateFormatted(cell)) {
@@ -249,7 +252,6 @@ public class SendEvent implements Runnable {
         }
         return payload;
     }
-
 }
 
 
