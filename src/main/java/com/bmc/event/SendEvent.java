@@ -137,7 +137,7 @@ public class SendEvent implements Runnable {
                 Cell cell = cellIterator.next();
                 if (cell != null) {
                     cellIndex = cell.getColumnIndex();
-                    String headerCell = headerRow.getCell(cellIndex).getStringCellValue();
+                    String headerCell = headerRow.getCell(cellIndex) == null ? null : headerRow.getCell(cellIndex).getStringCellValue();
                     if (headerCell == null || headerCell.isEmpty()) {
                         continue;
                     }
