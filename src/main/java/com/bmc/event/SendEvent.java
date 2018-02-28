@@ -1,11 +1,22 @@
 package com.bmc.event;
 
+import java.io.IOException;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
@@ -13,6 +24,8 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import org.apache.http.client.HttpClient;
+import org.apache.http.conn.ssl.X509HostnameVerifier;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.poi.hssf.usermodel.HSSFDateUtil;
 import org.apache.poi.ss.usermodel.Cell;
@@ -63,7 +76,9 @@ public class SendEvent implements Runnable {
     private static final String EVENT_CLASS = "eventClass";
     private static final String FINGER_PRINT_FIELDS = "fingerprintFields";
     private static final String PROPERTIES = "properties";
-    	
+
+    private static final boolean SSL_ACCEPT_ALL = true;
+
     private static final ImmutableSet<String> TAGGED_FINGERPRINTFIELDS = ImmutableSet.of(TITLE, MESSAGE, STATUS, SEVERITY, SOURCE_NAME);
     	
     private Row headerRow;
@@ -83,7 +98,11 @@ public class SendEvent implements Runnable {
     public static Client getClient() {
         Client client = null;
         try {
-            HttpClient httpClient = HttpClients.custom().setMaxConnTotal(EventIngestion.THREAD_COUNT).setMaxConnPerRoute(EventIngestion.THREAD_COUNT).build();
+            HttpClientBuilder builder = HttpClients
+                    .custom()
+                    .setMaxConnTotal(EventIngestion.THREAD_COUNT)
+                    .setMaxConnPerRoute(EventIngestion.THREAD_COUNT);
+            HttpClient httpClient = setSSLPolicy(builder, SSL_ACCEPT_ALL).build();
             ApacheHttpClient4Engine engine = new ApacheHttpClient4Engine(httpClient);
             ExecutorService executor = Executors.newFixedThreadPool(EventIngestion.THREAD_COUNT);
             client = new ResteasyClientBuilder().httpEngine(engine).asyncExecutor(executor).build();
@@ -93,7 +112,19 @@ public class SendEvent implements Runnable {
         } 
         return client;
     }
-	
+
+    private static HttpClientBuilder setSSLPolicy(HttpClientBuilder builder, boolean acceptAll) throws KeyManagementException, NoSuchAlgorithmException {
+        if (acceptAll) {
+            SSLContext trustAllSslContext = SSLManagement.createTrustAllSslContext();
+            X509HostnameVerifier acceptAllHostnameVerifier = SSLManagement.getAcceptAllHostnameVerifier();
+
+            return builder
+                    .setSslcontext(trustAllSslContext)
+                    .setHostnameVerifier(acceptAllHostnameVerifier);
+        }
+        return builder;
+    }
+
     private void sendEvent(String payload, int rownum) {
         Response response = null;
         WebTarget target = null;
